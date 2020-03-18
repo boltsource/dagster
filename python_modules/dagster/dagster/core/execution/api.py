@@ -423,7 +423,7 @@ def execute_partition_set(partition_set, partition_filter, instance=None):
             environment_dict=partition_set.environment_dict_for_partition(partition),
             mode='default',
             tags=merge_dicts(
-                {'dagster/backfill': make_new_backfill_id()},
+                instance.tags_for_backfill_id(make_new_backfill_id()),
                 partition_set.tags_for_partition(partition),
             ),
             status=PipelineRunStatus.NOT_STARTED,

@@ -98,3 +98,6 @@ class RunStorage(six.with_metaclass(ABCMeta)):
 
     def dispose(self):
         '''Explicit lifecycle management.'''
+
+    def tags_for_backfill_id(self, backfill_id):
+        return {'dagster/backfill': backfill_id}

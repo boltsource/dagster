@@ -625,6 +625,12 @@ class PipelineRunsFilter(namedtuple('_PipelineRunsFilter', 'run_id tags pipeline
             'status': self.status,
         }
 
+    @staticmethod
+    def for_schedule(schedule):
+        return {
+            'tags': {'dagster/schedule_name': schedule.name}
+        }
+
 
 def _create_environment_schema(pipeline_def, mode_definition):
     from .environment_configs import (

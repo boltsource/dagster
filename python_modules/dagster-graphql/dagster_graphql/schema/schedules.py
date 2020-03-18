@@ -204,14 +204,14 @@ class DauphinRunningSchedule(dauphin.ObjectType):
         return [
             graphene_info.schema.type_named('PipelineRun')(r)
             for r in graphene_info.context.instance.get_runs(
-                filters=PipelineRunsFilter(tags={'dagster/schedule_name': self._schedule.name}),
+                filters=PipelineRunsFilter.for_schedule(self._schedule),
                 limit=kwargs.get('limit'),
             )
         ]
 
     def resolve_runs_count(self, graphene_info):
         return graphene_info.context.instance.get_runs_count(
-            filters=PipelineRunsFilter(tags={"dagster/schedule_name": self._schedule.name})
+            filters=PipelineRunsFilter.for_schedule(self._schedule)
         )
 
 

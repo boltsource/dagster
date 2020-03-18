@@ -58,9 +58,6 @@ def execution_params_for_schedule(graphene_info, schedule_def):
     ):
         tags = schedule_def.get_tags(schedule_context)
 
-    check.invariant('dagster/schedule_name' not in tags)
-    tags['dagster/schedule_name'] = schedule_def.name
-
     selector = schedule_def.selector
     mode = schedule_def.mode
 
