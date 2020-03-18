@@ -6,8 +6,9 @@ from dagster.core.definitions.pipeline import ExecutionSelector
 from dagster.core.errors import DagsterInvariantViolationError
 from dagster.core.events import DagsterEvent
 from dagster.core.execution.context.system import SystemPipelineExecutionContext
-from dagster.core.execution.memoization import validate_retry_memoization
+from dagster.core.execution.plan.execute import inner_plan_execution_iterator
 from dagster.core.execution.plan.plan import ExecutionPlan
+from dagster.core.execution.retries import Retries
 from dagster.core.instance import DagsterInstance
 from dagster.core.storage.pipeline_run import PipelineRun, PipelineRunStatus
 from dagster.core.system_config.objects import EnvironmentConfig
@@ -65,7 +66,7 @@ def create_execution_plan(pipeline, environment_dict=None, run_config=None):
 
 def _pipeline_execution_iterator(pipeline_context, execution_plan, pipeline_run):
     '''A complete execution of a pipeline. Yields pipeline start, success,
-    and failure events. Defers to _steps_execution_iterator for step execution.
+    and failure events.
     '''
     check.inst_param(pipeline_context, 'pipeline_context', SystemPipelineExecutionContext)
     check.inst_param(execution_plan, 'execution_plan', ExecutionPlan)
@@ -75,8 +76,8 @@ def _pipeline_execution_iterator(pipeline_context, execution_plan, pipeline_run)
     pipeline_success = True
     generator_closed = False
     try:
-        for event in _steps_execution_iterator(
-            pipeline_context, execution_plan=execution_plan, pipeline_run=pipeline_run
+        for event in pipeline_context.executor_config.get_engine().execute(
+            pipeline_context, execution_plan
         ):
             if event.is_step_failure:
                 pipeline_success = False
@@ -144,7 +145,7 @@ def execute_pipeline_iterator(pipeline, environment_dict=None, run_config=None, 
 
     Parameters:
         pipeline (PipelineDefinition): The pipeline to execute.
-        environment_dict (Optional[dict]): The enviroment configuration that parameterizes this run,
+        environment_dict (Optional[dict]): The environment configuration that parametrizes this run,
             as a dict.
         run_config (Optional[RunConfig]): Optionally specifies additional config options for
             pipeline execution.
@@ -177,7 +178,7 @@ def execute_pipeline(
 
     Parameters:
         pipeline (PipelineDefinition): The pipeline to execute.
-        environment_dict (Optional[dict]): The enviroment configuration that parameterizes this run,
+        environment_dict (Optional[dict]): The environment configuration that parametrizes this run,
             as a dict.
         run_config (Optional[RunConfig]): Optionally specifies additional config options for
             pipeline execution.
@@ -290,7 +291,7 @@ def execute_pipeline_with_mode(
     Parameters:
         pipeline (PipelineDefinition): The pipeline to execute.
         mode (str): The mode to use.
-        environment_dict (Optional[dict]): The enviroment configuration that parameterizes this run,
+        environment_dict (Optional[dict]): The environment configuration that parametrizes this run,
             as a dict.
         instance (Optional[DagsterInstance]): The instance to execute against. If this is ``None``,
             an ephemeral instance will be used, and no artifacts will be persisted from the run.
@@ -310,24 +311,14 @@ def execute_pipeline_with_mode(
     )
 
 
-def _steps_execution_iterator(pipeline_context, execution_plan, pipeline_run):
-    '''Iterates over execution of individual steps yielding the associated events.
-    '''
-    check.inst_param(pipeline_context, 'pipeline_context', SystemPipelineExecutionContext)
+def execute_plan_iterator(
+    execution_plan, pipeline_run, instance, retries=None, environment_dict=None
+):
     check.inst_param(execution_plan, 'execution_plan', ExecutionPlan)
     check.inst_param(pipeline_run, 'pipeline_run', PipelineRun)
-
-    if execution_plan.previous_run_id:
-        validate_retry_memoization(pipeline_context, execution_plan)
-
-    return pipeline_context.executor_config.get_engine().execute(pipeline_context, execution_plan)
-
-
-def execute_plan_iterator(execution_plan, pipeline_run, environment_dict=None, instance=None):
-    check.inst_param(execution_plan, 'execution_plan', ExecutionPlan)
-    check.inst_param(pipeline_run, 'pipeline_run', PipelineRun)
+    check.inst_param(instance, 'instance', DagsterInstance)
+    retries = check.opt_inst_param(retries, 'retries', Retries, Retries.disabled_mode())
     environment_dict = check.opt_dict_param(environment_dict, 'environment_dict')
-    instance = check.inst_param(instance, 'instance', DagsterInstance)
 
     initialization_manager = pipeline_initialization_manager(
         execution_plan.pipeline_def, environment_dict, pipeline_run, instance, execution_plan
@@ -340,8 +331,8 @@ def execute_plan_iterator(execution_plan, pipeline_run, environment_dict=None, i
     generator_closed = False
     try:
         if pipeline_context:
-            for event in _steps_execution_iterator(
-                pipeline_context, execution_plan=execution_plan, pipeline_run=pipeline_run
+            for event in inner_plan_execution_iterator(
+                pipeline_context, execution_plan=execution_plan, retries=retries
             ):
                 yield event
     except GeneratorExit:
@@ -355,7 +346,7 @@ def execute_plan_iterator(execution_plan, pipeline_run, environment_dict=None, i
                 yield event
 
 
-def execute_plan(execution_plan, instance, pipeline_run, environment_dict=None):
+def execute_plan(execution_plan, instance, pipeline_run, environment_dict=None, retries=None):
     '''This is the entry point of dagster-graphql executions. For the dagster CLI entry point, see
     execute_pipeline() above.
     '''
@@ -363,6 +354,7 @@ def execute_plan(execution_plan, instance, pipeline_run, environment_dict=None):
     check.inst_param(instance, 'instance', DagsterInstance)
     check.inst_param(pipeline_run, 'pipeline_run', PipelineRun)
     environment_dict = check.opt_dict_param(environment_dict, 'environment_dict')
+    check.opt_inst_param(retries, 'retries', Retries)
 
     return list(
         execute_plan_iterator(
@@ -370,6 +362,7 @@ def execute_plan(execution_plan, instance, pipeline_run, environment_dict=None):
             environment_dict=environment_dict,
             pipeline_run=pipeline_run,
             instance=instance,
+            retries=retries,
         )
     )
 
