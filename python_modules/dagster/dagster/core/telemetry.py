@@ -108,7 +108,7 @@ def log_action(action, client_time, elapsed_time=None, metadata=None):
         return
 
     try:
-        (instance_id, dagster_telemetry_enabled) = _get_instance_id()
+        (instance_id, dagster_telemetry_enabled) = _get_telemetry_config()
 
         if dagster_telemetry_enabled is False:
             return
@@ -231,17 +231,16 @@ def _upload_logs(dagster_log_dir, log_size, dagster_log_queue_dir):
         pass
 
 
-def _get_instance_id():
+def _get_telemetry_config():
     '''
-    Get the instance id.
+    Get the instance id and whether telemetry is enabled (default: off)
 
     If $DAGSTER_HOME is not set, use uuid.getnode() to generate unique id.
     If $DAGSTER_HOME is set, then access $DAGSTER_HOME/dagster.yaml to get telemetry.instance_id
-    and telemetry.enabled. If telemetry.enabled is not False, then generate and save
-    telemetry.instance_id and set telemetry.enabled to True.
+    and telemetry.enabled.
     '''
     instance_id = None
-    dagster_telemetry_enabled = None
+    dagster_telemetry_enabled = False
     dagster_home_path = _dagster_home_if_set()
 
     if dagster_home_path is None:
@@ -252,7 +251,6 @@ def _get_instance_id():
     if not os.path.exists(instance_config_path):
         with open(instance_config_path, 'w') as f:
             instance_id = str(uuid.getnode())
-            dagster_telemetry_enabled = True
             yaml.dump(
                 {
                     TELEMETRY_STR: {
@@ -276,19 +274,16 @@ def _get_instance_id():
                 instance_profile_json[TELEMETRY_STR] = {}
 
             if INSTANCE_ID_STR in instance_profile_json[TELEMETRY_STR]:
-                instance_id = instance_profile_json[TELEMETRY_STR][INSTANCE_ID_STR]
+                if isinstance(instance_profile_json[TELEMETRY_STR][INSTANCE_ID_STR], str):
+                    instance_id = instance_profile_json[TELEMETRY_STR][INSTANCE_ID_STR]
             if ENABLED_STR in instance_profile_json[TELEMETRY_STR]:
-                dagster_telemetry_enabled = instance_profile_json[TELEMETRY_STR][ENABLED_STR]
+                if isinstance(instance_profile_json[TELEMETRY_STR][ENABLED_STR], bool):
+                    dagster_telemetry_enabled = instance_profile_json[TELEMETRY_STR][ENABLED_STR]
 
-        if not dagster_telemetry_enabled is False and (
-            instance_id is None or dagster_telemetry_enabled is None
-        ):
+        if dagster_telemetry_enabled is True and instance_id is None:
             if instance_id is None:
                 instance_id = str(uuid.uuid4())
                 instance_profile_json[TELEMETRY_STR][INSTANCE_ID_STR] = instance_id
-            if dagster_telemetry_enabled is None:
-                dagster_telemetry_enabled = True
-                instance_profile_json[TELEMETRY_STR][ENABLED_STR] = dagster_telemetry_enabled
 
             with open(instance_config_path, 'w') as f:
                 yaml.dump(instance_profile_json, f)

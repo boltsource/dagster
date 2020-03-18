@@ -4,7 +4,7 @@ import logging
 
 from dagster import seven
 from dagster.core.telemetry import (
-    _get_instance_id,
+    _get_telemetry_config,
     execute_disable_telemetry,
     execute_enable_telemetry,
     execute_reset_telemetry_profile,
@@ -127,7 +127,7 @@ def test_dagster_telemetry_enabled():
                 logger = logging.getLogger('telemetry_logger')
                 with mock.patch.object(logger, 'info') as mock_logger:
                     execute_enable_telemetry()
-                    (instance_id, dagster_telemetry_enabled) = _get_instance_id()
+                    (instance_id, dagster_telemetry_enabled) = _get_telemetry_config()
                     assert dagster_telemetry_enabled == True
 
                     log_action(
@@ -148,3 +148,16 @@ def test_dagster_telemetry_enabled():
                         'metadata': {},
                     }
                     mock_logger.assert_called_once_with(json.dumps(expected_log))
+
+
+# Test that the default is opt-in
+def test_dagster_telemetry_unset():
+    with environ({'DAGSTER_TELEMETRY_ENABLED': 'True'}):
+        with seven.TemporaryDirectory() as tmpdir_path:
+            with environ({'DAGSTER_HOME': tmpdir_path}):
+                logger = logging.getLogger('telemetry_logger')
+                with mock.patch.object(logger, 'info') as mock_logger:
+                    log_action(
+                        action='did something', client_time=datetime.datetime.now(), metadata={}
+                    )
+                    mock_logger.assert_not_called()
