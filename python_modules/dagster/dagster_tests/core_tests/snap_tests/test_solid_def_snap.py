@@ -1,6 +1,10 @@
-from dagster import InputDefinition, OutputDefinition, solid
+from dagster import InputDefinition, OutputDefinition, composite_solid, solid
 from dagster.core.serdes import deserialize_json_to_dagster_namedtuple, serialize_dagster_namedtuple
-from dagster.core.snap.solid import build_solid_def_snap
+from dagster.core.snap.solid import (
+    CompositeSolidDefSnap,
+    build_composite_solid_def_snap,
+    build_solid_def_snap,
+)
 
 
 def test_basic_solid_definition():
@@ -14,6 +18,24 @@ def test_basic_solid_definition():
     assert (
         deserialize_json_to_dagster_namedtuple(serialize_dagster_namedtuple(solid_snap))
         == solid_snap
+    )
+
+
+def test_basic_comp_solid_definition():
+    @solid
+    def noop_solid(_):
+        pass
+
+    @composite_solid
+    def comp_solid():
+        noop_solid()
+
+    comp_solid_meta = build_composite_solid_def_snap(comp_solid)
+
+    assert isinstance(comp_solid_meta, CompositeSolidDefSnap)
+    assert (
+        deserialize_json_to_dagster_namedtuple(serialize_dagster_namedtuple(comp_solid_meta))
+        == comp_solid_meta
     )
 
 
