@@ -248,9 +248,7 @@ export default class ExecutionSessionContainer extends React.Component<
     const modeError = this.getModeError();
     const pipeline = this.getPipeline();
 
-    const tags = currentSession.tags.length
-      ? currentSession.tags
-      : pipeline.tags;
+    const tags = currentSession.tags || pipeline.tags || [];
     return (
       <SplitPanelContainer
         axis={"vertical"}
