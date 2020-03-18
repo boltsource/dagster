@@ -172,8 +172,11 @@ class ScheduleDefinition(object):
     def get_tags(self, context):
         check.inst_param(context, 'context', ScheduleExecutionContext)
         if self._tags:
-            return self._tags
-        return self._tags_fn(context)
+            tags = self._tags
+        else:
+            tags = self._tags_fn(context)
+        check.invariant('dagster/schedule_name' not in tags)
+        tags['dagster/schedule_name'] = self.name
 
     def should_execute(self, context):
         check.inst_param(context, 'context', ScheduleExecutionContext)
