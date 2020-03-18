@@ -4,10 +4,6 @@ from dagster import check
 from dagster.core.serdes import whitelist_for_serdes
 
 
-def _output_handles_to_snaps(output_handles):
-    return list(map(lambda oh: OutputHandleSnap(oh.solid.name, oh.output_def.name), output_handles))
-
-
 def build_dep_structure_snapshot_from_pipeline(pipeline_def):
     invocations = []
     dep_structure = pipeline_def.dependency_structure
@@ -19,7 +15,9 @@ def build_dep_structure_snapshot_from_pipeline(pipeline_def):
             input_dep_snaps.append(
                 InputDependencySnap(
                     input_name=input_handle.input_def.name,
-                    prev_output_snaps=_output_handles_to_snaps(output_handles),
+                    prev_output_snaps=[
+                        OutputHandleSnap(oh.solid.name, oh.output_def.name) for oh in output_handles
+                    ],
                 )
             )
 
